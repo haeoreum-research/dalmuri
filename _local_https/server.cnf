@@ -1,0 +1,14 @@
+[req]
+prompt = no
+distinguished_name = dn
+req_extensions = req_ext
+
+[dn]
+CN = Verseworkui-MacStudio.local
+
+[req_ext]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = Verseworkui-MacStudio.local
+IP.1 = 192.168.219.110

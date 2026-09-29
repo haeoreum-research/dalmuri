@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>보안실 — 셧다운 USB</title>
+<link rel="stylesheet" href="assets/98.css?v=4">
+<link rel="stylesheet" href="assets/theme.css?v=4">
+<style>
+/* =========================================================
+   6_보안실_셧다운USB (Windows 오류 화면 스타일)
+   - 필요 에셋 (기존 프로젝트 images/ 폴더와 동일 위치에 두면 자동 적용)
+     · videos/camcorder-footage.mp4 : 화면4 캠코더 영상 (직접 교체 필요)
+   ========================================================= */
+html,body{
+  width:100%; height:100%;
+  background:#000; overflow:hidden;
+  letter-spacing:-0.1em;
+  position:relative;
+}
+body{ background:#008080; }
+
+#stage-wrap{ width:100%; height:100%; position:relative; background:#000; }
+#stage{
+  width:1920px; height:1080px; position:absolute;
+  top:50%; left:50%;
+  background:#000; overflow:hidden;
+}
+
+.screen{ position:absolute; inset:0; width:100%; height:100%; display:none; }
+.screen.active{ display:flex; }
+
+/* ---------- 화면1·1.5·5 공용 : Windows 오류 화면 (블루스크린 / 빨간 화면은 .alert-red로 전환) ---------- */
+.bsod{
+  background:#0137aa; color:#fff;
+  align-items:flex-start; justify-content:center;
+}
+.bsod.alert-red{ background:#ff0004; }
+.bsod-inner{ width:1180px; margin-top:90px; }
+.bsod-face{ font-size:102px; line-height:1; font-weight:bold; margin:0 0 32px; }
+.bsod-text p{ margin:0 0 26px; font-size:25px; line-height:1.7; }
+.bsod-text .bsod-danger{ color:#ff5252; font-weight:bold; }
+
+.bsod-pwrow{ display:flex; align-items:flex-end; gap:16px; margin-bottom:12px; font-size:32px; }
+.bsod-pw-label{ white-space:nowrap; }
+.bsod-pw-blank{ display:inline-flex; align-items:flex-end; gap:8px; }
+.bsod-pw-char{ display:inline-block; width:34px; text-align:center; flex:none; }
+.bsod-caret{ animation:bsodCaret 1s steps(1) infinite; }
+@keyframes bsodCaret{ 50%{ opacity:0; } }
+.bsod-enter-icon{
+  font-size:30px; line-height:1; cursor:pointer; user-select:none; flex:none;
+}
+.bsod-enter-icon:active{ opacity:.5; }
+
+.bsod-error{
+  min-height:30px; margin-bottom:2px;
+  font-size:18px; font-weight:bold; color:#fff56b; visibility:hidden;
+}
+.bsod-error.on{ visibility:visible; animation:bsodBlink .35s 3; }
+@keyframes bsodBlink{ 50%{ opacity:0; } }
+
+.bsod-progress{ margin-top:26px; display:none; }
+.bsod-progress.show{ display:block; }
+.bsod-progress-label{ font-size:21px; margin-bottom:14px; }
+.bsod-progress-bar{ width:100%; height:16px; background:rgba(255,255,255,.3); }
+.bsod-progress-fill{ height:100%; width:100%; background:#fff; }
+.bsod-progress-pct{ font-size:23px; margin-top:12px; }
+
+/* ---------- 확인되지 않은 영상 기록 발견 화면 (화면1과 분리된 빨간 화면)
+   진행률 카운트 종료 후 자동으로 전환되고, 5·4·3·2·1 카운트가 끝나면 자동으로 영상 재생 ---------- */
+.bsod-count{ font-size:58px; font-weight:bold; letter-spacing:0.05em; }
+
+/* ---------- 화면4 : 영상 ---------- */
+#screen4{ background:#000; align-items:center; justify-content:center; }
+#footageVideo{ width:100%; height:100%; object-fit:contain; background:#000; }
+
+#hiddenPwInput{ position:absolute; opacity:0; pointer-events:none; }
+</style>
+</head>
+<body class="crt use-dgm">
+<div id="stage-wrap">
+  <div id="stage">
+
+    <!-- 화면1 : 셧다운 암호 입력 + 진행률 (같은 화면 안에서 아래로 이어짐) -->
+    <div class="screen active bsod" id="screen1">
+      <div class="bsod-inner" id="bsodBox">
+        <div class="bsod-face">:(</div>
+        <div class="bsod-text">
+          <p>달무리 연구소 전체 데이터 영구 삭제 및 시스템 셧다운을 시작합니다.<br>
+          · 삭제 대상 : 서버 내 모든 백업 데이터</p>
+          <p class="bsod-danger">본 작업 실행 시 복구가 절대 불가능하며,<br>
+          전체 데이터가 물리적으로 영구 삭제됩니다.</p>
+          <div class="bsod-pwrow">
+            <span class="bsod-pw-label">승인 암호 :</span>
+            <span class="bsod-pw-blank" id="pwBlank"></span>
+            <span class="bsod-enter-icon" id="enterIcon" title="Enter">⏎</span>
+          </div>
+          <div class="bsod-error" id="errorMsg"></div>
+
+          <!-- 정답 입력 시 이 자리에서 바로 아래로 진행률이 이어서 표시됨 -->
+          <div class="bsod-progress" id="progressArea">
+            <div class="bsod-progress-label">데이터 영구 삭제 진행 중...</div>
+            <div class="bsod-progress-bar"><div class="bsod-progress-fill" id="progressFill"></div></div>
+            <div class="bsod-progress-pct" id="progressPct">100%</div>
+          </div>
+        </div>
+      </div>
+
+      <input type="text" id="hiddenPwInput" maxlength="6" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    </div>
+
+    <!-- 화면1.5 : 확인되지 않은 영상 기록 발견 + 5·4·3·2·1 카운트 (빨간 화면, 화면1과 분리됨 — 카운트 종료 시 자동으로 영상 재생) -->
+    <div class="screen bsod alert-red" id="screenRecord">
+      <div class="bsod-inner">
+        <div class="bsod-face">:(</div>
+        <div class="bsod-text">
+          <p>확인되지 않은 영상 기록이 발견되었습니다.<br>해당 영상 파일 강제 재생을 시작합니다.</p>
+          <div class="bsod-count" id="recordCount">5</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 화면4 : 캠코더 영상 재생 (화면1.5의 5·4·3·2·1 카운트 종료 후 자동 재생 시작) -->
+    <div class="screen" id="screen4">
+      <video id="footageVideo" src="videos/camcorder-footage.mp4" playsinline></video>
+    </div>
+
+    <!-- 화면5 : 완료 (Windows 오류 화면 스타일 그대로, 이 상태로 계속 유지됨) -->
+    <div class="screen bsod" id="screen5">
+      <div class="bsod-inner">
+        <div class="bsod-face">:)</div>
+        <div class="bsod-text"><p id="screen5text" style="white-space:pre-line;"></p></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="assets/crew.js?v=1"></script>
+<script>
+/* ---------------- 스테이지 스케일링 (1920x1080 기준, 기존 fitStage 패턴) ---------------- */
+function fitStage(){
+  var stage = document.getElementById('stage');
+  var s = Math.max(window.innerWidth/1920, window.innerHeight/1080);
+  stage.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
+}
+window.addEventListener('resize', fitStage);
+window.addEventListener('load', fitStage);
+fitStage();
+
+/* ---------------- 제작진 단계 이동 시, 이전 단계의 타이머가 뒤늦게 화면을 바꾸지 않도록 추적/정리
+   (이 파일의 진행은 전부 setTimeout 체인으로 이어지므로, 모든 단계-진행용 setTimeout을
+   crewTimeout으로 감싸서 등록해 두고 단계 이동 때마다 한꺼번에 취소함) ---------------- */
+var crewTimers = [];
+function crewTimeout(fn, ms){ var id = setTimeout(fn, ms); crewTimers.push(id); return id; }
+function crewClearTimers(){ crewTimers.forEach(function(id){ clearTimeout(id); }); crewTimers = []; }
+
+/* ---------------- 화면 전환 ---------------- */
+function showScreen(id){
+  var list = document.querySelectorAll('.screen');
+  for(var i=0;i<list.length;i++) list[i].classList.remove('active');
+  document.getElementById(id).classList.add('active');
+}
+
+/* ---------------- 화면1 : 패스워드 로직 (밑줄 + 엔터 아이콘 스타일) ---------------- */
+var CORRECT_PW = 'hypnos';
+var CORRECT_PW_KO = 'ㅗㅛㅔㅜㅐㄴ';  // 한글 키보드 상태로 hypnos를 그대로 쳤을 때 나오는 자모
+var PW_LEN = 6;
+var hiddenInput = document.getElementById('hiddenPwInput');
+var enterIcon   = document.getElementById('enterIcon');
+var errorMsg    = document.getElementById('errorMsg');
+var bsodBox     = document.getElementById('bsodBox');
+var pwBlank     = document.getElementById('pwBlank');
+
+function renderPwBlank(){
+  var v = hiddenInput.value;
+  var parts = [];
+  for(var i=0;i<PW_LEN;i++){
+    if(i < v.length) parts.push('<span class="bsod-pw-char">*</span>');
+    else if(i === v.length) parts.push('<span class="bsod-pw-char bsod-caret">_</span>');
+    else parts.push('<span class="bsod-pw-char">_</span>');
+  }
+  pwBlank.innerHTML = parts.join('');
+}
+function shakeWindow(){
+  bsodBox.classList.remove('gf-shake');
+  void bsodBox.offsetWidth;
+  bsodBox.classList.add('gf-shake');
+}
+function showError(msg){
+  errorMsg.classList.remove('on');
+  void errorMsg.offsetWidth;
+  errorMsg.textContent = msg;
+  errorMsg.classList.add('on');
+}
+hiddenInput.addEventListener('input', function(){
+  hiddenInput.value = hiddenInput.value.slice(0, PW_LEN);
+  renderPwBlank();
+});
+hiddenInput.addEventListener('keydown', function(e){
+  if(e.key === 'Enter') attemptSubmit();
+});
+enterIcon.addEventListener('click', attemptSubmit);
+document.getElementById('screen1').addEventListener('click', function(){ hiddenInput.focus(); });
+window.addEventListener('load', function(){ hiddenInput.focus(); renderPwBlank(); });
+
+function attemptSubmit(){
+  if(hiddenInput.disabled) return;
+  var val = hiddenInput.value.trim().toLowerCase();
+  if(val === CORRECT_PW || val === CORRECT_PW_KO){
+    errorMsg.classList.remove('on');
+    hiddenInput.blur();
+    hiddenInput.disabled = true;
+    crewTimeout(startCountdown, 500);
+  } else {
+    showError('승인 암호가 일치하지 않습니다.');
+    shakeWindow();
+    hiddenInput.value = '';
+    crewTimeout(renderPwBlank, 350);
+    hiddenInput.focus();
+  }
+}
+
+/* ---------------- 진행률 : 같은 화면(화면1) 안에서 비밀번호 입력칸 바로 아래로 이어서 표시 (100 → 10)
+   3번 파일 부팅화면과 같은 방식으로, 일정 속도가 아니라 불규칙하게 툭툭 끊기며 진행 (합계 약 4초) ---------------- */
+var progressArea = document.getElementById('progressArea');
+var progressFill = document.getElementById('progressFill');
+var progressPct  = document.getElementById('progressPct');
+function setProgress(pct){
+  progressFill.style.width = pct + '%';
+  progressPct.textContent = pct + '%';
+}
+var COUNTDOWN_STEPS  = [100, 91, 78, 73, 59, 54, 43, 38, 27, 20, 14, 10];
+var COUNTDOWN_DELAYS = [210, 525, 255, 615, 285, 473, 210, 540, 255, 428, 308];   // STEPS 사이 대기시간(ms)
+function startCountdown(){
+  GF_CREW.setCurrent(1);
+  progressArea.classList.add('show');
+  var i = 0;
+  (function step(){
+    setProgress(COUNTDOWN_STEPS[i]);
+    if(i < COUNTDOWN_STEPS.length - 1){
+      crewTimeout(function(){ i++; step(); }, COUNTDOWN_DELAYS[i]);
+    } else {
+      crewTimeout(showRecordMessage, 500);
+    }
+  })();
+}
+
+/* ---------------- 타이핑 효과 ---------------- */
+function typeText(el, text, speed, done){
+  el.textContent = '';
+  var i = 0;
+  (function step(){
+    if(i <= text.length){
+      el.textContent = text.slice(0,i);
+      i++;
+      crewTimeout(step, speed);
+    } else if(done){ done(); }
+  })();
+}
+
+/* ---------------- 미확인 기록 발견 + 5·4·3·2·1 카운트 (팝업 아님 — 같은 화면 안에서 자동 진행) ---------------- */
+var recordCount = document.getElementById('recordCount');
+function showRecordMessage(){
+  GF_CREW.setCurrent(2);
+  showScreen('screenRecord');
+  runRecordCountdown(5);
+}
+function runRecordCountdown(n){
+  recordCount.textContent = n;
+  if(n <= 1){
+    crewTimeout(startScreen4, 1000);
+    return;
+  }
+  crewTimeout(function(){ runRecordCountdown(n - 1); }, 1000);
+}
+
+/* ---------------- 화면4 : 캠코더 영상 ---------------- */
+function startScreen4(){
+  GF_CREW.setCurrent(3);
+  showScreen('screen4');
+  var video = document.getElementById('footageVideo');
+  video.pause();
+  video.currentTime = 0;
+  var advanced = false;
+  function advance(){ if(advanced) return; advanced = true; startScreen5(); }
+  // addEventListener 대신 프로퍼티 할당을 써서, 이 단계를 여러 번 재진입해도
+  // (제작진 패널로 되돌아왔다가 다시 진입하는 경우 등) 리스너가 계속 쌓이지 않고 항상 교체됨
+  video.onended = advance;
+  video.onerror = function(){ crewTimeout(advance, 2500); };
+  var p = video.play();
+  if(p && p.catch) p.catch(function(){ crewTimeout(advance, 2500); });
+}
+
+/* ---------------- 화면5 : 완료 (Windows 오류 화면 스타일 유지, 이후 자동 전환 없음) ---------------- */
+function startScreen5(){
+  GF_CREW.setCurrent(4);
+  showScreen('screen5');
+  typeText(document.getElementById('screen5text'),
+    '달무리 연구소 서버 내 모든 데이터 삭제가 완료되었습니다.\n시스템이 종료되었습니다.',
+    22);
+}
+
+/* ══════════════ 제작진용 단계 이동 패널 (assets/crew.js) ══════════════
+   1. 암호 입력 → 2. 진행률 표시 → 3. 미확인 기록 경고 → 4. 캠코더 영상 → 5. 완료(마지막)
+   ※ 기존에 있던 Ctrl+Shift+1~5 테스트 단축키는 새 공통 단축키(Ctrl+Shift+Alt+…)로 대체됨 */
+function crewResetAll(){
+  crewClearTimers();
+  var video = document.getElementById('footageVideo');
+  video.pause();
+  video.onended = null;
+  video.onerror = null;
+  progressArea.classList.remove('show');
+  hiddenInput.disabled = false;
+  hiddenInput.value = '';
+  errorMsg.classList.remove('on');
+  renderPwBlank();
+}
+function crewStep(n){
+  crewResetAll();
+  if(n === 0){
+    showScreen('screen1');
+    hiddenInput.focus();
+  } else if(n === 1){
+    showScreen('screen1');
+    startCountdown();
+  } else if(n === 2){
+    showRecordMessage();
+  } else if(n === 3){
+    startScreen4();
+  } else if(n === 4){
+    startScreen5();
+  }
+}
+GF_CREW.init([
+  { name:'1. 암호 입력',            apply: ()=>crewStep(0) },
+  { name:'2. 진행률 표시',          apply: ()=>crewStep(1) },
+  { name:'3. 미확인 기록 경고',     apply: ()=>crewStep(2) },
+  { name:'4. 캠코더 영상',          apply: ()=>crewStep(3) },
+  { name:'5. 완료 (마지막 화면)',   apply: ()=>crewStep(4) },
+]);
+</script>
+</body>
+</html>

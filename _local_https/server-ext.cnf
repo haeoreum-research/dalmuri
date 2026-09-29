@@ -1,0 +1,9 @@
+[server_ext]
+basicConstraints = critical, CA:false
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = Verseworkui-MacStudio.local
+IP.1 = 192.168.219.110

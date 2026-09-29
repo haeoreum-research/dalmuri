@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>인쇄 관리 시스템</title>
+<link rel="stylesheet" href="assets/98.css?v=4">
+<link rel="stylesheet" href="assets/theme.css?v=4">
+<style>
+  body { background:#008080; letter-spacing:-0.05em; }
+
+  /* ── 1024×768 구형 모니터 기준 화면. 화면 비율 그대로 확대/축소만 하고
+       (늘어나거나 잘리지 않음) 실제 배치 대상 해상도(1024×768)에서는 1:1 그대로 표시됨 ── */
+  #stage { position:fixed; left:50%; top:50%; width:1024px; height:768px; transform-origin:center center; }
+
+  /* ── 바탕화면 아이콘 (더블클릭으로 해당 창 실행) ── */
+  #desktop { position:absolute; inset:0 0 34px 0; padding:20px 0 0 20px; }
+  .deskicon { width:170px; text-align:center; padding:10px 4px; margin:0 0 18px 0; cursor:pointer; }
+  .deskicon .cap { display:inline-block; }
+  .deskicon:hover .cap { background:rgba(0,0,128,.4); color:#fff; }
+  .deskicon .ico { height:52px; display:flex; align-items:center; justify-content:center; margin-bottom:8px; }
+  .deskicon .ico span { font-size:44px; line-height:1; filter:drop-shadow(1px 1px 0 rgba(0,0,0,.45)); }
+  .deskicon .ico img { height:48px; image-rendering:auto; filter:drop-shadow(1px 1px 0 rgba(0,0,0,.45)); }
+  #printIcoWrap { height:88px; }
+  #printIcoImg { height:88px; }
+  .title-bar-text { letter-spacing:-0.05em; }
+  .deskicon .cap { color:#fff; font-size:17px; line-height:1.6; padding:1px 10px; text-shadow:1px 1px 0 #000; }
+
+  /* ── 작업표시줄 (클릭 시 해당 창 열기/포커스) ── */
+  #taskbar { position:fixed; left:0; bottom:0; width:1024px; height:34px; background:#c0c0c0;
+             border-top:2px solid #fff; display:flex; align-items:center; gap:6px; padding:2px 4px; z-index:500;
+             transform-origin:bottom left; }
+  .startbtn { display:flex; align-items:center; gap:6px; padding:2px 10px 2px 6px; height:26px;
+              background:#c0c0c0; border:2px solid; border-color:#fff #404040 #404040 #fff; font-weight:bold; font-size:14px; }
+  .startbtn .winflag { width:18px; height:16px;
+     background:conic-gradient(from 0deg at 50% 50%, #e34f26 0 25%, #7fbb00 0 50%, #00a3ee 0 75%, #ffb900 0 100%);
+     clip-path:polygon(0 15%, 100% 0, 100% 85%, 0 100%); }
+  .taskitem { display:flex; align-items:center; gap:6px; padding:2px 14px; height:26px; min-width:200px;
+              background:#dcdcdc; border:2px solid; border-color:#fff #404040 #404040 #fff; font-size:13px; cursor:pointer; }
+  .taskitem.active { border-color:#404040 #fff #fff #404040; }
+  .taskitem img { height:22px; }
+  #taskDalmuri img { height:18px; }
+
+  /* ── 창 배치 (1024×768 구형 모니터 화면에 맞게 재배치, 필요하면 타이틀바를 끌어서 이동 가능) ── */
+  #secwrap { position:absolute; left:190px; top:236px; transform-origin:top left; display:none; }
+  #secwrap .window { width:644px; }
+  #slots .gf-slot { width:46px; height:56px; font-size:31px; }
+  .warnrow { display:flex; gap:16px; align-items:center; padding:6px 3px 2px; line-height:1.6; font-size:20px; }
+  .warntext { transform:scaleX(0.98); transform-origin:left center; font-weight:bold; }
+  #win1 .status-bar-field { font-size:13px; }
+  .warnicon { width:66px; height:60px; flex:none; margin-top:3px; object-fit:contain; }
+  .pwrow { display:flex; align-items:center; justify-content:center; gap:16px; margin:18px 0 6px; }
+  .pwlabel { font-size:20px; font-weight:bold; }
+  .pwlabel u { text-decoration:underline; }
+  #okbtn { font-weight:bold; font-size:17px; padding:4px 18px; min-height:28px; }
+  .hint { text-align:center; font-size:15px; color:#555; margin-top:12px; }
+
+  /* ── 달무리 연구소 비품관리시스템 창 (상시 표시, 기존 '화면2' 팝업을 대체) ── */
+  #popup { position:absolute; left:340px; top:70px; transform-origin:top left; display:none; }
+  #popup .window { width:586px; }
+  .frow { display:flex; align-items:center; gap:15px; margin:20px 0; }
+  .frow .k { width:132px; font-size:20px; font-weight:bold; }
+  .frow .v { flex:1; background:#fff; padding:10px 14px; font-size:24px; font-weight:normal; letter-spacing:1.5px; min-height:26px;
+             box-shadow:inset -1px -1px #fff, inset 1px 1px #808080, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a; }
+
+  /* ── 화면3 안내창 ── */
+  #screen3 { display:none; }
+  #screen3.show { display:flex; }
+  #screen3 { position:absolute; inset:0 0 34px 0; align-items:center; justify-content:center; }
+  #screen3 .window { width:660px; }
+  .infobox { padding:10px 14px; font-size:22px; font-weight:bold; line-height:1.8; }
+  .infobox .head { box-shadow:inset -1px -1px #fff, inset 1px 1px #808080; background:#fff; padding:14px 22px; margin-bottom:18px; }
+  .infobox .sq::before { content:'■ '; }
+  .toner-red { color:#cc0000; }
+  .toner-toggle-row { text-align:center; margin-top:8px; }
+  #tonerToggleBtn { font-weight:bold; font-size:17px; padding:4px 12px; min-width:0; }
+
+  /* ── 토너 교체 방법 팝업 (화면3 하단 토글 버튼 클릭 시 표시) ── */
+  #tonerPopup { display:none; }
+  #tonerPopup.show { display:flex; }
+  #tonerPopup { position:absolute; inset:0 0 34px 0; align-items:center; justify-content:center; z-index:50; }
+  #tonerPopup .window { width:650px; }
+  .toner-body { display:flex; align-items:center; gap:10px; padding:12px 6px; }
+  .toner-arrow { min-width:34px; min-height:64px; font-size:22px; font-weight:bold; flex:none; padding:4px 8px; }
+  .toner-content { flex:1; display:flex; flex-direction:column; align-items:center; text-align:center; gap:14px; }
+  .toner-step-text { font-size:19px; font-weight:bold; line-height:1.5; }
+  .toner-step-img { width:520px; height:360px; object-fit:contain; }
+  /* 갈무리체(keep-galmuri)가 둥근모체보다 얇아 보이는 문제 보정
+     — .frow .v(class 2개)가 .keep-galmuri(class 1개)보다 우선순위가 높아 bold가 안 먹히고 있어서 !important로 고정 */
+  /* em 배율은 "자기 자신에게 지정됐을 크기"가 아니라 부모 기준으로 계산되기 때문에,
+     keep-galmuri가 크기를 정하는 클래스(.v, .pwlabel, .gf-slot)와 같은 요소에 있으면
+     그 크기를 건너뛰고 한 단계 위 부모 기준으로 계산돼 지나치게 작아짐.
+     → 비품코드/보관위치/Password/슬롯처럼 "같은 요소"인 자리는 원래 크기 기준 실제 px로 고정 */
+  .keep-galmuri { font-weight:bold !important; font-size:0.88em !important; }
+  .frow .v.keep-galmuri { font-size:21px !important; }        /* 24px 기준 */
+  .pwlabel.keep-galmuri { font-size:18px !important; }          /* 20px 기준 */
+  #slots .gf-slot.keep-galmuri { font-size:27px !important; }  /* 31px 기준 */
+  .keynum.keep-galmuri { font-size:23px !important; }          /* 26px에서 축소 */
+  #p_loc { font-weight:bold; }
+  /* 갈무리체(keep-galmuri)와 둥근모체가 한 줄에 섞일 때 기준선이 살짝 어긋나 보이는 자리에
+     범용으로 쓰는 미세 하향 보정 (상태표시줄 1/0%, 보관함 열쇠 번호 등) */
+  .nudge-dn { display:inline-block; position:relative; top:0.15em; }
+</style>
+</head>
+<body class="crt use-dgm">
+
+<div id="stage">
+
+<!-- ═══ 바탕화면 아이콘 ═══ -->
+<div id="desktop">
+  <div class="deskicon" id="iconPrint">
+    <div class="ico" id="printIcoWrap"><img id="printIcoImg" src="images/print.png" alt=""></div>
+    <div class="cap">인쇄 관리<br>시스템</div>
+  </div>
+  <div class="deskicon" id="iconDalmuri">
+    <div class="ico"><img src="images/dalmuri-logo.png" alt=""></div>
+    <div class="cap">달무리 연구소<br>비품관리시스템</div>
+  </div>
+</div>
+
+<!-- ═══ 화면 1 : 보안 코드 입력 창 ═══ -->
+<div id="secwrap">
+  <div class="window" id="win1">
+    <div class="title-bar">
+      <div class="title-bar-text">인쇄 관리 시스템</div>
+      <div class="title-bar-controls"><button aria-label="Close" id="closeWin1"></button></div>
+    </div>
+    <div class="window-body" style="padding:14px 21px;">
+      <div class="warnrow">
+        <img class="warnicon" src="images/warning.png" alt="경고">
+        <div class="warntext">
+          소모품 교체 인증이 필요합니다.
+        </div>
+      </div>
+      <div class="pwrow">
+        <span class="pwlabel keep-galmuri"><u>P</u>assword :</span>
+        <div class="gf-slots" id="slots">
+          <div class="gf-slot keep-galmuri"></div><div class="gf-slot keep-galmuri"></div><div class="gf-slot keep-galmuri"></div><div class="gf-slot keep-galmuri"></div>
+        </div>
+        <button id="okbtn">확 인</button>
+      </div>
+      <div class="gf-errmsg" id="errmsg">※ 잘못된 보안 코드입니다. 다시 입력하십시오. ※</div>
+    </div>
+    <div class="status-bar">
+      <p class="status-bar-field">인쇄 대기 문서 : <span class="keep-galmuri nudge-dn">1</span>건</p>
+      <p class="status-bar-field">토너 잔량 : <span class="keep-galmuri nudge-dn">0%</span></p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 화면 2 : 바코드 비품 팝업 ═══ -->
+<div id="popup">
+  <div class="window">
+    <div class="title-bar">
+      <div class="title-bar-text">달무리 연구소 비품관리시스템</div>
+      <div class="title-bar-controls"><button aria-label="Close" id="closePopup"></button></div>
+    </div>
+    <div class="window-body" style="padding:20px 24px;">
+      <div class="frow"><span class="k">비품명 :</span><span class="v keep-galmuri" id="p_name"></span></div>
+      <div class="frow"><span class="k">비품코드 :</span><span class="v keep-galmuri" id="p_code"></span></div>
+      <div class="frow"><span class="k">보관위치 :</span><span class="v keep-galmuri" id="p_loc"></span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 화면 3 : 수리 & 소모품 안내 ═══ -->
+<div id="screen3">
+  <div class="window">
+    <div class="title-bar">
+      <div class="title-bar-text">인쇄 관리 시스템</div>
+      <div class="title-bar-controls"><button aria-label="Close"></button></div>
+    </div>
+    <div class="window-body" style="padding:14px 20px;">
+      <div class="infobox">
+        <div class="head">
+          <div class="sq">장비 상태: <span class="toner-red">토너 고갈</span></div>
+          <div class="sq">소모품 보관 위치 : 자재 보관실 내 철제 보관함</div>
+          <div class="sq">보관함 열쇠 번호 : <span class="keynum keep-galmuri nudge-dn">991004</span></div>
+        </div>
+        <div class="toner-toggle-row">
+          <button id="tonerToggleBtn">토너 교체 방법</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 토너 교체 방법 팝업 (화면3에서 토글 버튼 클릭 시) ═══ -->
+<div id="tonerPopup">
+  <div class="window">
+    <div class="title-bar">
+      <div class="title-bar-text">프린터 토너 교체 방법</div>
+      <div class="title-bar-controls"><button aria-label="Close" id="closeTonerPopup"></button></div>
+    </div>
+    <div class="window-body">
+      <div class="toner-body">
+        <button class="toner-arrow" id="tonerPrev">◀</button>
+        <div class="toner-content">
+          <div class="toner-step-text" id="tonerStepText"></div>
+          <img class="toner-step-img" id="tonerStepImg" alt="토너 교체 방법 안내 이미지">
+        </div>
+        <button class="toner-arrow" id="tonerNext">▶</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /#stage -->
+
+<!-- ═══ 작업표시줄 (stage 밖으로 분리 — 항상 화면 맨 아래 고정) ═══ -->
+<div id="taskbar">
+  <div class="startbtn"><span class="winflag"></span><span class="keep-galmuri">Start</span></div>
+  <div class="taskitem" id="taskPrint" style="display:none"><img src="images/print.png" alt="">인쇄 관리 시스템</div>
+  <div class="taskitem" id="taskDalmuri" style="display:none"><img src="images/dalmuri-logo.png" alt="">달무리 연구소 비품관리시스템</div>
+</div>
+
+<script src="assets/common.js?v=4"></script>
+<script src="assets/crew.js?v=1"></script>
+<script>
+/* ═══════════════════════ 운영 설정 (여기만 수정하면 됩니다) ═══════════════════════
+   PASSWORD : 정답 보안 코드 (대소문자 무관)
+   ITEMS    : 비품 목록 [비품코드, 비품명, 보관위치] — 비품관리 시트 최종본 반영(2026-09-23).
+   ※ 바코드에는 비품코드(DMR-0001 형식)가 인코딩되어야 하며,
+     스캔(또는 키보드 입력 후 Enter) 시 해당 비품 팝업이 뜹니다.
+   ※ 리셋은 F5.
+*/
+const PASSWORD = 'F75R';
+
+const ITEMS = [
+  // 대형 (18)
+  ['DMR-0001','A4용지','H-3'],            ['DMR-0002','종이 그릇','H-2'],
+  ['DMR-0003','뽁뽁이 롤','D-2'],          ['DMR-0004','일회용 수저','B-1'],
+  ['DMR-0005','지퍼백','F-2'],             ['DMR-0006','쓰레기봉투','G-3'],
+  ['DMR-0007','마스크','A-2'],             ['DMR-0008','위생 장갑','D-1'],
+  ['DMR-0009','일회용 접시','H-1'],        ['DMR-0010','종이컵','D-3'],
+  ['DMR-0011','아크릴 꽂이','E-1'],        ['DMR-0012','서류봉투','F-3'],
+  ['DMR-0013','스프링 노트','A-1'],        ['DMR-0014','A4 클립보드','E-3'],
+  ['DMR-0015','L자 파일','B-2'],           ['DMR-0016','HDMI 젠더','C-2'],
+  ['DMR-0017','멀티탭','G-2'],             ['DMR-0018','마우스','E-2'],
+  // 중형 (9)
+  ['DMR-0019','계산기','B-3-1'],           ['DMR-0020','스테이플러','C-3-2'],
+  ['DMR-0021','티슈','F-1-1'],             ['DMR-0022','물티슈','F-1-2'],
+  ['DMR-0023','견출지','A-3-1'],           ['DMR-0024','일회용 젓가락','C-1-1'],
+  ['DMR-0025','양면테이프','G-1-1'],       ['DMR-0026','스카치테이프','C-3-1'],
+  ['DMR-0027','케이블 정리 벨크로','B-3-2'],
+  // 소형 (6)
+  ['DMR-0028','검정 볼펜','G-1-3'],        ['DMR-0029','유성 네임펜','C-1-2'],
+  ['DMR-0030','형광펜','C-1-3'],           ['DMR-0031','스테이플러 심','G-1-2'],
+  ['DMR-0032','포스트잇','A-3-2'],         ['DMR-0033','클립','A-3-3'],
+];
+/* ═══════════════════════ 설정 끝 ═══════════════════════ */
+
+const DB = {};
+ITEMS.forEach(([code,name,loc]) => DB[code.toUpperCase()] = {code,name,loc});
+
+let buffer = '';
+const slots  = [...document.querySelectorAll('#slots .gf-slot')];
+const errmsg = document.getElementById('errmsg');
+const win1   = document.getElementById('win1');
+const secwrap= document.getElementById('secwrap');
+const popup  = document.getElementById('popup');
+const taskPrint   = document.getElementById('taskPrint');
+const taskDalmuri = document.getElementById('taskDalmuri');
+GF.renderSlots(slots, 0);
+
+/* ── 창 상태 관리: 열림 여부 + 어느 창이 맨 위(포커스)인지에 따라 작업표시줄 갱신 ──
+   - 열려 있지 않은 창은 작업표시줄에 아예 안 뜸
+   - 열려 있는 창 중 맨 위(포커스)인 것만 오목, 나머지 열린 창은 볼록 */
+let topZ = 10;
+let focusedWin = null;   // 'print' | 'dalmuri' | null
+function keyOf(el){ return el === secwrap ? 'print' : 'dalmuri'; }
+
+function updateTaskbar(){
+  const printOpen = secwrap.style.display === 'block';
+  const dalOpen   = popup.style.display === 'block';
+  taskPrint.style.display   = printOpen ? 'flex' : 'none';
+  taskDalmuri.style.display = dalOpen   ? 'flex' : 'none';
+  taskPrint.classList.toggle('active',   printOpen && focusedWin === 'print');
+  taskDalmuri.classList.toggle('active', dalOpen   && focusedWin === 'dalmuri');
+}
+
+function bringFront(el){
+  el.style.zIndex = ++topZ;
+  focusedWin = keyOf(el);
+  updateTaskbar();
+}
+
+function openWin(el){
+  if(el.style.display !== 'block'){
+    el.style.display = 'block';
+  }
+  bringFront(el);
+  if(el === secwrap) GF_CREW.setCurrent(1);
+}
+
+function closeWin(el){
+  el.style.display = 'none';
+  if(focusedWin === keyOf(el)) focusedWin = null;
+  updateTaskbar();
+}
+
+/* 창의 아무 곳이나 누르면 그 창이 맨 앞(포커스)으로 */
+secwrap.addEventListener('pointerdown', ()=> bringFront(secwrap));
+popup.addEventListener('pointerdown', ()=> bringFront(popup));
+
+/* ── 바탕화면 아이콘: 한 번 클릭하면 선택(강조), 더블클릭(또는 곧이은 두 번째 클릭)이면 실행 ── */
+function setupIcon(iconEl, winEl){
+  let selOnce = false;
+  iconEl.addEventListener('click', ()=>{
+    if(!selOnce){
+      document.querySelectorAll('.deskicon.sel').forEach(d=>d.classList.remove('sel'));
+      iconEl.classList.add('sel'); selOnce = true; setTimeout(()=>selOnce=false, 600);
+      return;
+    }
+    openWin(winEl);
+  });
+  iconEl.addEventListener('dblclick', ()=> openWin(winEl));
+}
+setupIcon(document.getElementById('iconPrint'),   secwrap);
+setupIcon(document.getElementById('iconDalmuri'), popup);
+
+/* ── 닫기 버튼: 실제로 창을 닫음 ── */
+document.getElementById('closeWin1').onclick  = ()=> closeWin(secwrap);
+document.getElementById('closePopup').onclick = ()=> closeWin(popup);
+
+/* ── 작업표시줄 항목 클릭으로도 동일하게 창 열기/맨 앞으로 ── */
+taskPrint.addEventListener('click', ()=> openWin(secwrap));
+taskDalmuri.addEventListener('click', ()=> openWin(popup));
+
+updateTaskbar();   // 초기 상태 반영 (둘 다 닫혀 있으므로 작업표시줄 항목 없음)
+
+function wrongEffect(){
+  GF.shake(win1);
+  GF.errorSlots(slots);
+  errmsg.classList.add('on');
+  setTimeout(()=>{ errmsg.classList.remove('on'); buffer=''; GF.renderSlots(slots,0); }, 1200);
+}
+
+function showPopup(item){
+  openWin(popup);   // 바코드 스캔 시 창이 닫혀있으면 자동으로 열어줌
+  // 비품명/비품코드/보관위치 모두 갈무리체로 통일 (한글 포함 전체) — 폰트가 섞이지 않으므로
+  // 기준선이 서로 어긋날 일이 없어 별도 정렬 보정이 필요 없음
+  document.getElementById('p_name').textContent = item.name;
+  document.getElementById('p_code').textContent = item.code;
+  document.getElementById('p_loc').textContent  = item.loc;
+}
+
+function submit(){
+  const v = buffer.trim().toUpperCase();
+  buffer = '';
+  if(secwrap.style.display === 'block') GF.renderSlots(slots, 0);
+  if(!v) return;
+  if(DB[v]){ showPopup(DB[v]); return; }              // 바코드 스캔 → 비품 팝업 (창 상태 무관하게 항상 동작)
+  if(secwrap.style.display !== 'block') return;       // 인쇄관리시스템 창을 열기 전에는 비밀번호 입력 자체가 동작 안 함
+  if(v === PASSWORD.toUpperCase()){                   // 정답 → 화면3
+    secwrap.style.display = 'none';
+    popup.style.display = 'none';
+    focusedWin = null;
+    updateTaskbar();
+    document.getElementById('iconPrint').style.display = 'none';   // 프린트 아이콘 완전히 숨김
+    document.getElementById('iconDalmuri').style.display = 'none'; // 비품관리시스템 아이콘도 완전히 숨김
+    document.getElementById('screen3').classList.add('show');
+    GF_CREW.setCurrent(2);
+    return;
+  }
+  wrongEffect();
+}
+
+/* 키 입력은 물리 키(e.code) 기준 → 한/영 IME 상태 무관.
+   바코드 스캐너(키보드 웨지)도 동일하게 동작. */
+function keyToChar(e){
+  let m;
+  if(m = /^Key([A-Z])$/.exec(e.code))    return m[1];
+  if(m = /^Digit([0-9])$/.exec(e.code))  return m[1];
+  if(m = /^Numpad([0-9])$/.exec(e.code)) return m[1];
+  if(e.code === 'Minus' || e.code === 'NumpadSubtract') return '-';
+  if(!e.code && /^[a-zA-Z0-9\-]$/.test(e.key)) return e.key.toUpperCase();
+  return null;
+}
+document.addEventListener('keydown', e=>{
+  // 제작진 공용 단축키(Ctrl+Shift+Alt+문자)는 assets/crew.js가 먼저 가로채서 처리하지만,
+  // 혹시 모를 충돌에 대비해 이 문자 입력 로직에서도 한 번 더 확실히 걸러냄
+  if(e.ctrlKey && e.shiftKey && e.altKey) return;
+  if(e.key === 'Enter' || e.key === 'Tab' || e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Tab'){
+    e.preventDefault(); submit(); return;
+  }
+  if(e.code === 'Backspace' || e.key === 'Backspace'){
+    e.preventDefault();
+    buffer = buffer.slice(0,-1);
+    GF.renderSlots(slots, buffer.length);
+    return;
+  }
+  const ch = keyToChar(e);
+  if(ch !== null){
+    e.preventDefault();
+    buffer += ch;
+    GF.renderSlots(slots, buffer.length);
+  }
+});
+document.getElementById('okbtn').onclick = submit;
+
+/* ── 토너 교체 방법 팝업 (화면3 하단 토글 버튼 → 팝업으로 단계별 안내, ◀▶로 이전/다음 순서,
+     각 단계 이미지를 일정 간격으로 번갈아 보여줘서 GIF처럼 움직이는 느낌을 냄.
+     이미지가 1장뿐인 단계(3번)는 애니메이션 없이 고정 이미지로 표시) ── */
+const TONER_STEPS = [
+  { text: '<span class="keep-galmuri nudge-dn">1.</span> 프린터 전면 커버를 열고<br>빈 토너 카트리지를 제거합니다.',
+    images: ['images/print/print1-1.png','images/print/print1-2.png','images/print/print1-3.png'] },
+  { text: '<span class="keep-galmuri nudge-dn">2.</span> 새 토너를 좌우로 5회 정도 흔든 후<br>딸깍 소리가 날 때까지 장착합니다.',
+    images: ['images/print/print2-1.png','images/print/print2-2.png','images/print/print2-3.png'] },
+  { text: '<span class="keep-galmuri nudge-dn">3.</span> 전면 커버를 닫으면 대기 중인 문서가<br>자동으로 출력됩니다.',
+    images: ['images/print/print3-1.png'] },
+];
+const tonerPopup    = document.getElementById('tonerPopup');
+const tonerStepText = document.getElementById('tonerStepText');
+const tonerStepImg  = document.getElementById('tonerStepImg');
+const tonerPrev     = document.getElementById('tonerPrev');
+const tonerNext     = document.getElementById('tonerNext');
+let tonerStepIdx   = 0;
+let tonerAnimFrame = 0;
+let tonerAnimTimer = null;
+
+function renderTonerStep(){
+  const step = TONER_STEPS[tonerStepIdx];
+  tonerStepText.innerHTML = step.text;
+  tonerAnimFrame = 0;
+  tonerStepImg.src = step.images[0];
+  tonerPrev.disabled = (tonerStepIdx === 0);
+  tonerNext.disabled = (tonerStepIdx === TONER_STEPS.length - 1);
+}
+function startTonerAnim(){
+  stopTonerAnim();
+  const imgs = TONER_STEPS[tonerStepIdx].images;
+  if(imgs.length <= 1) return;   // 이미지가 1장뿐이면 애니메이션 없이 고정 표시
+  tonerAnimTimer = setInterval(()=>{
+    tonerAnimFrame = (tonerAnimFrame + 1) % imgs.length;
+    tonerStepImg.src = imgs[tonerAnimFrame];
+  }, 1500);
+}
+function stopTonerAnim(){
+  if(tonerAnimTimer){ clearInterval(tonerAnimTimer); tonerAnimTimer = null; }
+}
+document.getElementById('tonerToggleBtn').onclick = ()=>{
+  tonerStepIdx = 0;
+  renderTonerStep();
+  startTonerAnim();
+  tonerPopup.classList.add('show');
+  GF_CREW.setCurrent(3);
+};
+document.getElementById('closeTonerPopup').onclick = ()=>{
+  tonerPopup.classList.remove('show');
+  stopTonerAnim();
+  GF_CREW.setCurrent(2);
+};
+tonerPrev.onclick = ()=>{
+  if(tonerStepIdx > 0){ tonerStepIdx--; renderTonerStep(); startTonerAnim(); }
+};
+tonerNext.onclick = ()=>{
+  if(tonerStepIdx < TONER_STEPS.length - 1){ tonerStepIdx++; renderTonerStep(); startTonerAnim(); }
+};
+
+/* ── 1024×768 기준으로 화면 비율을 유지한 채 맞춤 (실제 1024×768 모니터에서는 1:1로 표시,
+     다른 크기 화면에서는 잘리거나 늘어나지 않고 비율 그대로 확대/축소) ── */
+function fitStage(){
+  const s = Math.min(innerWidth/1024, innerHeight/768);
+  document.getElementById('stage').style.transform = `translate(-50%,-50%) scale(${s})`;
+  document.getElementById('taskbar').style.transform = `scale(${s})`;
+}
+fitStage();
+window.addEventListener('resize', fitStage);
+
+/* ── 창 드래그 이동 (타이틀바를 잡고 끌면 실제로 움직임) ── */
+function makeDraggable(winEl, designWidth){
+  const handle = winEl.querySelector('.title-bar');
+  if(!handle) return;
+  handle.style.cursor = 'move';
+  let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  handle.addEventListener('pointerdown', e => {
+    if(e.target.closest('button')) return;   // 닫기 등 버튼 클릭은 드래그 제외
+    bringFront(winEl);
+    dragging = true;
+    sx = e.clientX; sy = e.clientY;
+    ox = parseFloat(getComputedStyle(winEl).left);
+    oy = parseFloat(getComputedStyle(winEl).top);
+    handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener('pointermove', e => {
+    if(!dragging) return;
+    const scale = winEl.getBoundingClientRect().width / designWidth;  // 현재 실제 배율 역산
+    winEl.style.left = (ox + (e.clientX - sx) / scale) + 'px';
+    winEl.style.top  = (oy + (e.clientY - sy) / scale) + 'px';
+  });
+  handle.addEventListener('pointerup',     () => dragging = false);
+  handle.addEventListener('pointercancel', () => dragging = false);
+}
+makeDraggable(document.getElementById('secwrap'), 644);
+makeDraggable(document.getElementById('popup'), 586);
+
+/* ══════════════ 제작진용 단계 이동 패널 (assets/crew.js) ══════════════
+   1. 데스크탑(초기 화면) → 2. 보안 코드 입력창 → 3. 토너 상태 안내 → 4. 토너 교체 방법(마지막)
+   ※ 비품 조회 팝업(바코드 스캔)은 언제든 열 수 있는 보조 기능이라 단계 목록에서는 제외 */
+function crewResetAll(){
+  secwrap.style.display = 'none';
+  popup.style.display = 'none';
+  document.getElementById('screen3').classList.remove('show');
+  tonerPopup.classList.remove('show');
+  stopTonerAnim();
+  document.getElementById('iconPrint').style.display = '';
+  document.getElementById('iconDalmuri').style.display = '';
+  buffer = '';
+  GF.renderSlots(slots, 0);
+  errmsg.classList.remove('on');
+  focusedWin = null;
+  updateTaskbar();
+}
+function crewStep(n){
+  crewResetAll();
+  if(n === 0){
+    // 데스크탑 그대로 (아이콘만 보임)
+  } else if(n === 1){
+    openWin(secwrap);
+  } else if(n === 2){
+    document.getElementById('iconPrint').style.display = 'none';
+    document.getElementById('iconDalmuri').style.display = 'none';
+    document.getElementById('screen3').classList.add('show');
+  } else if(n === 3){
+    document.getElementById('iconPrint').style.display = 'none';
+    document.getElementById('iconDalmuri').style.display = 'none';
+    document.getElementById('screen3').classList.add('show');
+    tonerStepIdx = 0;
+    renderTonerStep();
+    startTonerAnim();
+    tonerPopup.classList.add('show');
+  }
+}
+GF_CREW.init([
+  { name:'1. 데스크탑 (초기 화면)',        apply: ()=>crewStep(0) },
+  { name:'2. 보안 코드 입력창',            apply: ()=>crewStep(1) },
+  { name:'3. 토너 상태 안내',              apply: ()=>crewStep(2) },
+  { name:'4. 토너 교체 방법 (마지막 화면)', apply: ()=>crewStep(3) },
+]);
+</script>
+</body>
+</html>
