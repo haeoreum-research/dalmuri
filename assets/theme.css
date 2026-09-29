@@ -1,0 +1,116 @@
+/* ═══════════════════════════════════════════════════════════
+   [의심구역] 공용 테마  (모든 화면이 이 파일을 공유합니다)
+   - 여기를 고치면 7개 화면 전체에 반영됩니다.
+   - 기반: 98.css (https://github.com/jdan/98.css, MIT)
+   - 폰트: Galmuri (https://github.com/quiple/galmuri, OFL)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 한글 픽셀 폰트 ── */
+@font-face {
+  font-family: 'Galmuri11';
+  src: url('./Galmuri11.woff2') format('woff2');
+  font-weight: normal;
+}
+@font-face {
+  font-family: 'Galmuri11';
+  src: url('./Galmuri11-Bold.woff2') format('woff2');
+  font-weight: bold;
+}
+/* 둥근모꼴+Fixedsys — 컴퓨터 프로그램 화면용 (1·3번) / 의뢰처 전달 공식 웹폰트 */
+@font-face {
+  font-family: 'DungGeunMo';
+  src: url('./DungGeunMo.woff2') format('woff2'),
+       url('./DungGeunMo.woff') format('woff');
+  font-display: swap;
+}
+/* Pretendard — 일반 페이지 한글용 (2·4·5·6·7번) */
+@font-face {
+  font-family: 'Pretendard';
+  src: url('./PretendardVariable.woff2') format('woff2-variations');
+  font-weight: 45 920;
+  font-display: swap;
+}
+
+/* 페이지별 폰트 스킴: <body class="use-dgm"> 또는 <body class="use-pret"> */
+body.use-dgm, body.use-dgm button, body.use-dgm input, body.use-dgm select, body.use-dgm textarea,
+body.use-dgm .window, body.use-dgm .title-bar {
+  font-family: 'DungGeunMo', 'Galmuri11', '굴림체', GulimChe, monospace !important;
+}
+body.use-pret, body.use-pret button, body.use-pret input, body.use-pret select, body.use-pret textarea {
+  font-family: 'Pretendard', 'Galmuri11', '맑은 고딕', 'Malgun Gothic', sans-serif !important;
+}
+/* 시스템 영문 안내(SYSTEM ERROR 등)는 기존 픽셀 폰트 유지용 */
+.keep-galmuri { font-family: 'Galmuri11', 'DungGeunMo', monospace !important; }
+
+* { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+
+html, body { width: 100%; height: 100%; overflow: hidden; cursor: default; }
+
+body, button, input, select, textarea, .window, .title-bar {
+  font-family: 'Galmuri11', 'Pixelated MS Sans Serif', '굴림체', GulimChe, '돋움', Dotum, monospace !important;
+}
+body { font-size: 15px; }
+.title-bar-text { font-size: 14px; letter-spacing: 1px; }
+button { font-size: 14px; min-height: 30px; padding: 4px 20px; }
+
+/* ── CRT 모니터 효과 (body에 class="crt" 추가 시) ── */
+.crt::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.10) 0 1px, transparent 1px 3px);
+}
+.crt-flicker::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9998;
+  background: rgba(255,255,255,.02);
+  animation: crtFlick .12s infinite;
+}
+@keyframes crtFlick { 0%,100% { opacity:.4 } 50% { opacity:1 } }
+
+/* ── 패스워드 슬롯 (별표 칸) ── */
+.gf-slots { display: flex; gap: 10px; justify-content: center; }
+.gf-slot {
+  width: 44px; height: 54px; background: #fff; color: #000;
+  border: 2px solid; border-color: #808080 #fff #fff #808080;
+  box-shadow: inset 1px 1px 0 #0a0a0a;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; font-weight: bold;
+}
+.gf-slot.filled::after { content: '＊'; line-height: 1; }
+/* 다음 입력 위치 표시: 깜빡이는 _ 커서 */
+.gf-slot.cur::after { content: '_'; line-height: 1; animation: gfCaret 1s steps(1) infinite; }
+@keyframes gfCaret { 50% { opacity: 0; } }
+.gf-slot.error { background: #ffb0b0; border-color: #a00000; }
+.gf-dark .gf-slot { background: #000; color: #00ff66; border-color: #003318; box-shadow: 0 0 6px rgba(0,255,102,.25) inset; }
+.gf-dark .gf-slot.error { background: #200000; color: #ff3333; border-color: #ff3333; }
+
+/* ── 오답 흔들림 ── */
+@keyframes gfShake {
+  0%,100% { transform: translateX(0); }
+  20% { transform: translateX(-14px); } 40% { transform: translateX(12px); }
+  60% { transform: translateX(-8px); }  80% { transform: translateX(6px); }
+}
+.gf-shake { animation: gfShake .45s; }
+
+/* ── 오답 메시지 ── */
+.gf-errmsg {
+  text-align: center; color: #cc0000; font-weight: bold;
+  height: 24px; letter-spacing: 1px; visibility: hidden;
+}
+.gf-errmsg.on { visibility: visible; animation: gfBlink .35s 3; }
+@keyframes gfBlink { 50% { opacity: 0; } }
+
+/* ── 전체 화면 성공/경보 오버레이 ── */
+.gf-overlay {
+  position: fixed; inset: 0; z-index: 20000; display: none;
+  align-items: center; justify-content: center; flex-direction: column;
+  text-align: center;
+}
+.gf-overlay.show { display: flex; }
+.gf-overlay.success { background: #001a00; color: #00ff66; }
+.gf-overlay.alarm   { background: #1a0000; color: #ff4444; }
+.gf-overlay h1 { font-size: 56px; letter-spacing: 6px; margin-bottom: 24px; text-shadow: 0 0 24px currentColor; }
+.gf-overlay p  { font-size: 22px; letter-spacing: 2px; }
+.gf-pulse { animation: gfPulse .8s infinite; }
+@keyframes gfPulse { 50% { opacity: .25; } }
+
+/* ── 화면 전환용 ── */
+.gf-hidden { display: none !important; }
