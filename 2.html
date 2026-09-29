@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="출입 통제 시스템">
+<link rel="apple-touch-icon" href="images/key.png">
+<title>출입 통제 시스템</title>
+<link rel="stylesheet" href="assets/98.css?v=4">
+<link rel="stylesheet" href="assets/theme.css?v=4">
+<style>
+  :root { --desktop-match-scale:1; }
+  body { background:#008080; display:flex; align-items:center; justify-content:center; letter-spacing:-0.05em;
+         -webkit-user-select:none; user-select:none; touch-action:manipulation;
+         height:100vh; height:100dvh; }
+
+  #calcwin { width:94vw; max-width:560px; transform-origin:center center; }
+  .window-body { padding:18px 22px 20px; }
+
+  /* ── 타이틀바: 그라데이션 대신 단색, 컨트롤버튼은 98.css 아이콘 그대로 비율만 확대 ── */
+  #calcwin .title-bar { padding:2px 6px 2px 8px; }
+  #calcwin .title-bar-text { display:flex; align-items:center; gap:6px; font-size:22px; }
+  #calcwin .title-bar-text .keyicon { height:30px; }
+  #calcwin .title-bar-controls { gap:5px; }
+  #calcwin .title-bar-controls button {
+    min-width:0; min-height:0; width:30px; height:24px;
+    background-position:center; background-repeat:no-repeat;
+  }
+  #calcwin .title-bar-controls button[aria-label="Minimize"] { background-size:16px 5px; }
+  #calcwin .title-bar-controls button[aria-label="Maximize"] { background-size:19px 19px; }
+  #calcwin .title-bar-controls button[aria-label="Close"]    { background-size:17px 15px; }
+
+
+  .promptlabel { font-size:26px; font-weight:bold; color:#111; margin-bottom:16px; }
+
+  /* ── 그룹박스형 비밀번호 표시 ── */
+  #screen { background:#c0c0c0; border:1px solid #868686; box-shadow:inset 1px 1px 0 #fff;
+            padding:18px; margin-bottom:22px; position:relative; box-sizing:border-box; }
+  #display { display:flex; gap:12px; justify-content:center; align-items:center; }
+  .dslot { width:56px; height:60px; background:#fff;
+           border:2px solid; border-color:#808080 #fff #fff #808080;
+           box-shadow:inset 1px 1px 0 #0a0a0a;
+           display:flex; align-items:center; justify-content:center; }
+  .dslot .star { font-size:32px; line-height:1; color:#000; font-weight:bold; }
+  .dslot .bar { display:none; }
+  .dslot .star::after { content:''; }
+  .dslot.cur .star::after { content:'_'; color:#888; animation:gfCaret 1s steps(1) infinite; }
+  .dslot.filled .star::after { content:'*'; font-size:32px; position:relative; top:-2px; animation:none; }
+  .dslot.error .star::after { content:'_'; color:#c00; }
+
+  /* ── 버튼 배열: 3열로 줄바꿈되는 세로형(1~8), 아래에 ←/Enter ── */
+  #pad { display:flex; flex-direction:column; gap:10px; }
+  .numgrid { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; }
+  .ctrlrow { display:flex; gap:10px; }
+  .key, .fnkey { flex:1; font-family:inherit; font-weight:bold; cursor:pointer; color:#000; text-shadow:none;
+                 display:flex; align-items:center; justify-content:center; text-align:center; padding:0; }
+  .numgrid .key { flex:0 0 calc((100% - 20px) / 3); aspect-ratio:1/1; font-size:40px; flex-direction:column; gap:4px; }
+  .klet { font-size:16px; font-weight:normal; letter-spacing:2px; color:#444;
+          font-family:'Galmuri11','DungGeunMo',monospace !important; }
+  .knum { font-size:40px; font-weight:bold; color:#000; line-height:1;
+          font-family:'Galmuri11','DungGeunMo',monospace !important; }
+  .fnkey { height:76px; font-size:24px; white-space:nowrap; }
+  .enterkey { }
+  .key.pressed, .fnkey.pressed {
+    box-shadow:inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey;
+  }
+  .key:focus, .fnkey:focus { outline:1px dotted #000; outline-offset:-5px; }
+
+  .gf-errmsg { margin:0; height:auto; font-size:20px; position:absolute;
+               top:0; right:0; bottom:0; left:0; /* iOS 12는 inset 미지원 */
+               background:#c0c0c0; display:flex; align-items:center; justify-content:center;
+               text-align:center; animation:none !important; box-sizing:border-box; }
+  .gf-errmsg span { display:block; width:100%; text-align:center; }
+  #errmsg span { animation: gfBlink .35s 3; }
+
+  /* ── 정답 연출: 전체화면 대신 "시스템 메시지" 팝업 (비밀번호 창 위에 모달로 표시) ── */
+  #successFx { position:fixed; top:0; right:0; bottom:0; left:0;
+               width:auto; height:auto; min-height:100%;
+               z-index:9000; display:none; align-items:center; justify-content:center;
+               background:transparent; box-sizing:border-box; overflow:visible; }
+  #successFx::before { content:''; position:absolute; left:-200vw; top:-200vh;
+                       width:500vw; height:500vh; background:rgba(0,0,0,.35);
+                       z-index:0; pointer-events:none; }
+  #successFx.show { display:flex; }
+  #successFx .msgbox { position:relative; z-index:1; }
+  .msgbox { width:590px; }
+  .msgpanel { display:flex; align-items:center; gap:76px; border:1px solid #868686; box-shadow:inset 1px 1px 0 #fff;
+              padding:26px 38px; }
+  .msgicon { width:56px; height:56px; border-radius:50%; background:#0047ff; border:3px solid #001a8c;
+             flex:none; display:flex; align-items:center; justify-content:center; }
+  .msgicon::after { content:'i'; color:#fff; font-family:Georgia,'Times New Roman',serif; font-style:italic;
+                     font-weight:bold; font-size:36px; line-height:1; }
+  .msgtitle { font-size:36px; font-weight:bold; color:#000; margin-bottom:26px; }
+  .msgbody  { font-size:25px; font-weight:normal; color:#000; line-height:1.58; }
+  .msgcopy { padding-left:20px; }
+
+
+  /* iPad mini 2 / iOS 12 Safari compatibility */
+  .key, .fnkey, .title-bar-controls button { -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none; }
+  .numgrid { margin:-5px; }
+  .numgrid .key { margin:5px; }
+  .ctrlrow > .fnkey + .fnkey { margin-left:8px; }
+  #pad > .ctrlrow { margin-top:8px; }
+  #calcwin .title-bar-text .keyicon { margin-right:6px; }
+  #calcwin .title-bar-controls button + button { margin-left:5px; }
+  @supports (gap:1px) {
+    .numgrid { margin:0; }
+    .numgrid .key { margin:0; }
+    .ctrlrow > .fnkey + .fnkey, #calcwin .title-bar-controls button + button { margin-left:0; }
+    #pad > .ctrlrow { margin-top:0; }
+    #calcwin .title-bar-text .keyicon { margin-right:0; }
+  }
+  .ios12-legacy .key { aspect-ratio:auto; }
+  html, body { margin:0; padding:0; width:100%; overflow:hidden; }
+
+
+  /* ── iPad mini 2에서 PC와 같은 축소 비율로 보이게 맞춤 ── */
+  body.desktop-match #calcwin {
+    width:560px;
+    max-width:none;
+    transform:scale(var(--desktop-match-scale));
+  }
+  body.desktop-match #successFx .msgbox {
+    transform:scale(var(--desktop-match-scale));
+    transform-origin:center center;
+  }
+</style>
+</head>
+<body class="crt use-dgm">
+
+<div class="window" id="calcwin">
+  <div class="title-bar">
+    <div class="title-bar-text"><img class="keyicon" src="images/key.png" alt=""><span class="keep-galmuri">Authentication</span></div>
+    <div class="title-bar-controls">
+      <button aria-label="Minimize"></button>
+      <button aria-label="Maximize"></button>
+      <button aria-label="Close"></button>
+    </div>
+  </div>
+
+  <div class="window-body" id="panel">
+    <div id="screen">
+      <div id="display"></div>
+      <div class="gf-errmsg" id="errmsg"><span><span class="keep-galmuri">ACCESS DENIED</span> — 잘못된 번호입니다</span></div>
+    </div>
+
+    <div id="pad">
+      <div class="numgrid">
+        <button class="key" data-k="1"><span class="klet">&nbsp;</span><span class="knum">1</span></button>
+        <button class="key" data-k="2"><span class="klet">ABC</span><span class="knum">2</span></button>
+        <button class="key" data-k="3"><span class="klet">DEF</span><span class="knum">3</span></button>
+        <button class="key" data-k="4"><span class="klet">GHI</span><span class="knum">4</span></button>
+        <button class="key" data-k="5"><span class="klet">JKL</span><span class="knum">5</span></button>
+        <button class="key" data-k="6"><span class="klet">MNO</span><span class="knum">6</span></button>
+        <button class="key" data-k="7"><span class="klet">PQRS</span><span class="knum">7</span></button>
+        <button class="key" data-k="8"><span class="klet">TUV</span><span class="knum">8</span></button>
+        <button class="key" data-k="9"><span class="klet">WXYZ</span><span class="knum">9</span></button>
+      </div>
+      <div class="ctrlrow">
+        <button class="fnkey" data-k="back">←</button>
+        <button class="fnkey enterkey" data-k="enter"><span class="keep-galmuri">Enter</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 정답 연출: 시스템 메시지 팝업 -->
+<div id="successFx">
+  <div class="window msgbox">
+    <div class="title-bar">
+      <div class="title-bar-text"></div>
+      <div class="title-bar-controls">
+        <button aria-label="Minimize"></button>
+        <button aria-label="Maximize"></button>
+        <button aria-label="Close"></button>
+      </div>
+    </div>
+    <div class="window-body">
+      <div class="msgpanel">
+        <div class="msgicon"></div>
+        <div class="msgcopy">
+          <div class="msgtitle">출입 승인</div>
+          <div class="msgbody">출입이 승인되었습니다.<br>잠시 후 문이 열립니다.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="assets/common.js?v=4"></script>
+<script>
+try { if(window.navigator.standalone) document.documentElement.classList.add('standalone-mode'); } catch(e) {}
+/* ═══════════════ 운영 설정 (여기만 수정하면 됩니다) ═══════════════
+   PASSWORD    : 정답 번호 (숫자 1~8만 사용)
+   MAX_LEN     : 입력 칸 개수 (정답 길이와 별개로 고정 — 현재 7칸)
+   ※ 정답 성공 시 "시스템 메시지" 팝업이 뜨며, 이후 자동으로 초기화면으로 돌아가지 않고 계속 유지됩니다.
+*/
+const PASSWORD   = '1456545';
+const MAX_LEN    = PASSWORD.length;   // 정답 길이에 자동으로 맞춰짐 (현재 7자리)
+/* ═══════════════════════ 설정 끝 ═══════════════════════ */
+
+let buffer = '', locked = false;
+const display = document.getElementById('display');
+const errmsg  = document.getElementById('errmsg');
+const panel   = document.getElementById('panel');
+const fx      = document.getElementById('successFx');
+
+for(let i=0;i<MAX_LEN;i++){
+  const d=document.createElement('div');
+  d.className='dslot';
+  d.innerHTML='<div class="star"></div><div class="bar"></div>';
+  display.appendChild(d);
+}
+const dslots = Array.prototype.slice.call(display.children);
+
+function render(){
+  dslots.forEach((s,i)=>{
+    s.classList.toggle('filled', i < buffer.length);
+    s.classList.toggle('cur', i === buffer.length);
+    s.classList.remove('error');
+  });
+}
+render();
+
+function wrong(){
+  try { if(window.GF && GF.shake) GF.shake(panel); } catch(e) {}
+  dslots.forEach(s=>{ s.classList.add('error'); s.classList.remove('cur'); });
+  errmsg.classList.add('on');
+  locked = true;
+  setTimeout(()=>{ errmsg.classList.remove('on'); buffer=''; render(); locked=false; }, 1200);
+}
+
+function success(){
+  fx.classList.add('show');
+  locked = true;   // 이후 계속 잠금 유지 — 자동으로 초기 화면으로 복귀하지 않음
+}
+
+/* ── 제작진용 단일 키 (무선 키보드로 현장에서 즉시 연출) ──
+   Space : 정답 입력을 건너뛰고 성공 메시지 표시
+   Esc   : 입력·성공 상태를 초기화하고 첫 화면으로 복귀
+   출연자는 이 화면에서 키보드를 조작하지 않으므로 별도의 패널 없이 즉시 실행됨 */
+function resetKeypad(){
+  locked = false;
+  buffer = '';
+  render();
+  fx.classList.remove('show');
+  errmsg.classList.remove('on');
+  dslots.forEach(s=> s.classList.remove('error'));
+}
+
+function press(k){
+  if(locked) return;
+  if(k === 'back'){ buffer = buffer.slice(0,-1); render(); return; }
+  if(k === 'enter'){
+    if(!buffer) return;
+    (buffer === PASSWORD) ? success() : wrong();
+    return;
+  }
+  if(buffer.length >= MAX_LEN) return;
+  buffer += k;
+  render();
+}
+
+/* iOS 12 Safari has no Pointer Events, so use the available input event. */
+(function bindButtons(){
+  var buttons = document.querySelectorAll('.key, .fnkey');
+  for(var i=0; i<buttons.length; i++){
+    (function(b){
+      var fire = function(e){
+        if(e && e.preventDefault) e.preventDefault();
+        press(b.getAttribute('data-k'));
+        b.classList.add('pressed');
+        setTimeout(function(){ b.classList.remove('pressed'); }, 130);
+      };
+      if('PointerEvent' in window) b.addEventListener('pointerdown', fire, false);
+      else if('ontouchstart' in window) b.addEventListener('touchstart', fire, false);
+      else b.addEventListener('click', fire, false);
+    })(buttons[i]);
+  }
+})();
+
+/* 실물 키보드/숫자패드도 지원 */
+document.addEventListener('keydown', e=>{
+  if(/^[1-9]$/.test(e.key)) { press(e.key); flash(e.key); }
+  else if(e.key === 'Backspace') press('back');
+  else if(e.key === 'Enter') press('enter');
+});
+function flash(k){
+  const b = document.querySelector(`[data-k="${k}"]`);
+  if(!b) return;
+  b.classList.add('pressed'); setTimeout(()=>b.classList.remove('pressed'), 130);
+}
+
+/* 제작진용 단일 키: Space=성공 건너뛰기, Esc=초기화. 다른 조합(Ctrl/Alt 등)과
+   플레이어의 숫자/Backspace/Enter 입력과는 절대 겹치지 않는 물리 키만 사용 */
+document.addEventListener('keydown', e=>{
+  if(e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
+  if(e.code === 'Space'){ e.preventDefault(); success(); }
+  else if(e.code === 'Escape'){ e.preventDefault(); resetKeypad(); }
+});
+
+/* ── 모바일 사파리 주소창 때문에 100% 높이가 실제 보이는 영역과 달라져서
+   세로 중앙정렬이 어긋나는 문제 수정 (여러 시점에서 실제 높이를 다시 재서 적용) ── */
+function fixViewportHeight(){
+  document.body.style.height = window.innerHeight + 'px';
+}
+function fixLegacyKeyRatio(){
+  var test = document.createElement('div');
+  if('aspectRatio' in test.style) return;
+  document.documentElement.classList.add('ios12-legacy');
+  var keys = document.querySelectorAll('.key');
+  for(var i=0; i<keys.length; i++){
+    keys[i].style.height = keys[i].offsetWidth + 'px';
+  }
+}
+function shouldDesktopMatchOnThisDevice(){
+  var ua = navigator.userAgent || '';
+  var isiPad = /iPad/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  return isiPad;
+}
+function applyDesktopMatchScale(){
+  if(!shouldDesktopMatchOnThisDevice()) {
+    document.body.classList.remove('desktop-match');
+    document.documentElement.style.setProperty('--desktop-match-scale', '1');
+    return;
+  }
+  /* 전체화면 모드에서 첫 화면이 더 꽉 차 보이도록 약 72%로 확대 */
+  var scale = 0.72;
+  document.body.classList.add('desktop-match');
+  document.documentElement.style.setProperty('--desktop-match-scale', String(scale));
+}
+function fixSuccessOverlaySize(){
+  /* 팝업 중앙 위치는 건드리지 않고, 검은 배경만 ::before로 화면 밖까지 확장 */
+  fx.style.left = '0';
+  fx.style.top = '0';
+  fx.style.right = '0';
+  fx.style.bottom = '0';
+  fx.style.width = 'auto';
+  fx.style.height = 'auto';
+  fx.style.minHeight = '100%';
+}
+function fixLegacyLayout(){
+  fixViewportHeight();
+  fixLegacyKeyRatio();
+  applyDesktopMatchScale();
+  fixSuccessOverlaySize();
+}
+fixLegacyLayout();
+document.addEventListener('DOMContentLoaded', fixLegacyLayout);
+window.addEventListener('load', fixLegacyLayout);
+window.addEventListener('resize', fixLegacyLayout);
+window.addEventListener('orientationchange', function(){ setTimeout(fixLegacyLayout, 200); });
+setTimeout(fixLegacyLayout, 300);
+</script>
+</body>
+</html>
