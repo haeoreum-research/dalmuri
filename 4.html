@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>통합 관제 시스템</title>
+<link rel="stylesheet" href="assets/98.css?v=4">
+<link rel="stylesheet" href="assets/theme.css?v=4">
+<style>
+  body { background:#008080; color:#fff; font-family:'DungGeunMo', 'MS Gothic', '굴림', monospace; }
+  /* keep-galmuri가 이 요소들을 갈무리 폰트로 지정하고 있어 둥근모로 강제 재지정 (꼼꼼하게 전체 적용) */
+  .keep-galmuri, .errtext b { font-family:'DungGeunMo', 'MS Gothic', '굴림', monospace !important; }
+  .screen { position:fixed; inset:0; display:none; }
+  .screen.show { display:flex; }
+
+  /* ── 화면 1 : SYSTEM ERROR (1~3번 파일과 동일한 Win98 창 스타일)
+       3번 파일(실험실 제어 프로그램)과 같은 1024×768 기준 캔버스 + 배율 축소 방식을 그대로 사용해서
+       비율·글자 크기·행간·자간이 항상 같은 느낌으로 보이도록 맞춤 (#s1stage가 그 캔버스 역할) ── */
+  #s1 { align-items:center; justify-content:center; background:#008080; }
+  #s1stage { width:1024px; height:768px; display:flex; align-items:center; justify-content:center;
+             transform-origin:center center; letter-spacing:-0.05em; }
+  #s1 .window { width:640px; }
+  #s1 .title-bar { padding:2px 6px 2px 8px; }
+  #s1 .title-bar-text { font-weight:normal; letter-spacing:-0.05em; }
+  .errbody { display:flex; flex-direction:column; align-items:center; text-align:center; gap:14px; padding:8px 4px 2px; line-height:1.6; }
+  .errbody img { width:64px; height:64px; flex:none; object-fit:contain; }
+  .errhead { font-size:22px; font-weight:bold; letter-spacing:2px; color:#a00000; }
+  .errtext { font-size:17px; line-height:1.6; color:#111; font-weight:bold; }
+  .errref { margin-top:22px; padding:14px 20px; text-align:center; font-size:19px; font-weight:bold; color:#a00000;
+            background:#fff; border:2px solid; border-color:#808080 #fff #fff #808080; box-shadow:inset 1px 1px 0 #0a0a0a; }
+  #s1 .status-bar-field { color:#000; }
+
+  /* ── 화면 3 : 4분할 CCTV ── */
+  #s3 { background:#000; display:none; }
+  #s3.show { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:4px; padding:4px; }
+  .cam { position:relative; background:#050505; overflow:hidden; border:1px solid #222; cursor:pointer; }
+  .cam.expanded { position:fixed; inset:0; z-index:100; border:none; }
+  #s3.has-expanded .cam:not(.expanded) { display:none; }
+  .cam video, .cam canvas, .cam iframe { width:100%; height:100%; object-fit:cover; display:block; }
+  .cam iframe { border:0; background:#000; pointer-events:none; }
+  /* CAM 01 라이브 영상: 플레이어의 검은 여백이 화면 밖으로 나가도록 약 13% 확대 */
+  .cam.live-cam iframe {
+    position:absolute;
+    left:50%; top:50%;
+    width:100%; height:100%;
+    transform:translate(-50%, -50%) scale(1.13);
+    transform-origin:center center;
+  }
+  .cam .label { position:absolute; top:10px; left:12px; z-index:2;
+                background:rgba(88,82,52,.78); color:#fff; padding:5px 10px; line-height:normal;
+                font-family:'DungGeunMo', 'MS Gothic', '굴림', monospace !important; }
+  .cam .label .cam-id { display:block; font-size:11px; letter-spacing:1px; opacity:.85; }
+  .cam .label .cam-name { display:block; font-size:15px; font-weight:bold; margin-top:1px; }
+  .cam .rec { position:absolute; top:10px; right:14px; font-size:14px; color:#ff3333; z-index:2;
+              animation:gfPulse 1s infinite; letter-spacing:2px; }
+  .cam .rec::before { content:'● '; }
+  .cam .stamp { position:absolute; bottom:10px; right:14px; font-size:14px; color:#ccc;
+                text-shadow:1px 1px 2px #000; z-index:2; font-variant-numeric:tabular-nums; }
+  .cam .nosig { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+                background:#00003a; }
+  .cam .nosig span { padding:10px 28px; background:#0000aa; color:#fff; font-size:22px;
+                      letter-spacing:6px; font-weight:bold; }
+</style>
+</head>
+<body class="crt use-pret">
+
+<!-- ═══ 화면 1 : 시스템 에러 ═══ -->
+<div class="screen show" id="s1">
+  <div id="s1stage">
+  <div class="window">
+    <div class="title-bar">
+      <div class="title-bar-text keep-galmuri">시스템 오류</div>
+      <div class="title-bar-controls">
+        <button aria-label="Minimize"></button><button aria-label="Maximize"></button><button aria-label="Close"></button>
+      </div>
+    </div>
+    <div class="window-body" style="padding:18px 26px;">
+      <div class="errbody">
+        <img src="images/warning.png" alt="">
+        <div class="errtext keep-galmuri">
+          <div class="errhead">[ SYSTEM ERROR ]</div>
+          <b>경고 : 원격 제어 신호 수신 불가</b><br>
+          시스템과의 통신이 중단되었습니다. 자동 제어가 불가능합니다.<br>
+          수동 복구 절차를 확인하십시오.
+        </div>
+      </div>
+      <div class="errref keep-galmuri">참조 코드 : SECURITY&nbsp;MANUAL&nbsp;10</div>
+    </div>
+    <div class="status-bar">
+      <p class="status-bar-field">시스템 상태 : 오류</p>
+      <p class="status-bar-field">복구 절차 : 대기 중</p>
+    </div>
+  </div>
+  </div>
+</div>
+
+<!-- ═══ 화면 2 : 지정 영상 재생 (3번 키) ═══ -->
+<div class="screen" id="s2" style="background:#000; align-items:center; justify-content:center;">
+  <video id="horrorVid" src="videos/horror.mp4" playsinline style="width:100%; height:100%; object-fit:cover;"></video>
+</div>
+
+<!-- ═══ 화면 3 : 4분할 CCTV (1번 칸만 실제 신호, 나머지 NO SIGNAL) ═══ -->
+<div class="screen" id="s3"></div>
+
+<script src="assets/common.js?v=4"></script>
+<script src="assets/crew.js?v=1"></script>
+<script>
+/* ═══════════════ 운영 설정 (여기만 수정하면 됩니다) ═══════════════
+   ▶ 화면 전환 (진행자 원격 조작) :
+      키보드 1 = 시스템 에러 화면
+      키보드 2 = 4분할 CCTV 화면
+      키보드 3 = 지정 영상 화면 (videos/horror.mp4) — 들어올 때 처음부터 재생, 끝까지 재생되면
+                 자동으로 "키보드 2 = 4분할 CCTV" 화면으로 돌아감(제작진 패널 표시도 함께 맞춰짐).
+                 끝나기 전에 다른 화면으로 직접 넘어가면 영상은 즉시 정지
+      (무선 키보드/프레젠터를 연결해 원격 전환하는 방식을 권장)
+
+   CAM1_LIVE       : true면 1번 칸(왼쪽 위)에 MediaMTX의 오즈모 라이브 화면을 표시합니다.
+                      false면 NO SIGNAL 화면으로 나옵니다.
+   CAM1_STREAM_URL : MediaMTX WebRTC 웹 플레이어 주소 (HLS보다 지연이 훨씬 적음).
+                     이 HTML과 MediaMTX를 같은 Mac에서 실행할 때는 127.0.0.1 그대로 사용하면 됩니다.
+   CAM_LABELS      : 각 분할 화면 좌상단 이름표 — {id, name} — (2~4번 칸은 전부 NO SIGNAL 고정)
+*/
+const CAM1_LIVE = true;
+const CAM1_STREAM_URL = 'http://127.0.0.1:8889/osmo?controls=false&muted=true&autoplay=true&playsInline=true&disablepictureinpicture=true';
+const CAM_LABELS = [
+  { id:'CAM 01', name:'폐기물 처리실' },
+  { id:'CAM 02', name:'놀이 치료실 B' },
+  { id:'CAM 03', name:'시청각실' },
+  { id:'CAM 04', name:'시체 보관실' },
+];
+/* ═══════════════════════ 설정 끝 ═══════════════════════ */
+
+/* ══════════════ 제작진용 화면 전환 (assets/crew.js 공용 패널 + 전용 단축키) ══════════════
+   출연자가 조작하는 화면이 아니라 전부 진행자가 무선 키보드로 전환하는 화면이므로,
+   패널의 이전/다음(J/K)·첫/마지막(H/L)·다시 시작(R)에 더해
+   Ctrl+Shift+Alt+1/2/3으로 각 화면에 곧장 진입하는 단축키도 함께 둠 */
+function crewApply(n){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('show'));
+  const vid = document.getElementById('horrorVid');
+  if(n === 0){
+    document.getElementById('s1').classList.add('show');
+    vid.pause();
+    vid.onended = null;
+  } else if(n === 1){
+    document.getElementById('s3').classList.add('show');
+    startCctv();
+    vid.pause();
+    vid.onended = null;
+  } else if(n === 2){
+    document.getElementById('s2').classList.add('show');
+    // 이 화면으로 들어올 때마다 처음부터 다시 재생(이전에 보다 만 지점이 아니라 항상 시작부터)
+    vid.currentTime = 0;
+    // 영상이 끝까지 재생되면 자동으로 4분할 CCTV 화면으로 돌아감(제작진 패널 표시도 함께 맞춤).
+    // addEventListener 대신 프로퍼티 할당이라 이 화면에 다시 들어올 때마다 항상 새 핸들러로
+    // 교체되고, 이전 핸들러가 쌓이거나 중복 실행되지 않음
+    vid.onended = ()=>{ GF_CREW.setCurrent(1); crewApply(1); };
+    const p = vid.play();
+    if(p && p.catch) p.catch(()=>{}); // 브라우저 자동재생 제한에 걸려도 화면 전환 자체는 그대로 진행
+  }
+}
+GF_CREW.init([
+  { name:'1. 시스템 에러',   apply: ()=>crewApply(0) },
+  { name:'2. 4분할 CCTV',    apply: ()=>crewApply(1) },
+  { name:'3. 지정 영상',     apply: ()=>crewApply(2) },
+], { startAt: 0 });
+
+document.addEventListener('keydown', e=>{
+  if(e.repeat) return;
+  if(!(e.ctrlKey && e.shiftKey && e.altKey)) return;
+  if(e.code === 'Digit1'){ e.preventDefault(); GF_CREW.goTo(0); }
+  else if(e.code === 'Digit2'){ e.preventDefault(); GF_CREW.goTo(1); }
+  else if(e.code === 'Digit3'){ e.preventDefault(); GF_CREW.goTo(2); }
+});
+
+/* ── 화면 1(시스템 오류) 캔버스를 3번 파일과 동일한 1024×768 기준으로 맞춰 비율 유지 축소
+     (2·3번 화면은 원래대로 실제 화면에 꽉 차게 유지) ── */
+function fitS1(){
+  const s = Math.min(innerWidth/1024, innerHeight/768);
+  document.getElementById('s1stage').style.transform = `scale(${s})`;
+}
+fitS1();
+window.addEventListener('resize', fitS1);
+
+/* ── 4분할 CCTV 구성 ── */
+let cctvBuilt = false;
+function startCctv(){
+  const s3 = document.getElementById('s3');
+  if(!cctvBuilt){
+    cctvBuilt = true;
+    CAM_LABELS.forEach((cam,i)=>{
+      const labelHtml = `<span class="label"><span class="cam-id">${cam.id}</span><span class="cam-name">${cam.name}</span></span>`;
+      const d = document.createElement('div');
+      d.className = 'cam';
+      if(i === 0 && CAM1_LIVE){
+        d.classList.add('live-cam');
+        d.innerHTML = `${labelHtml}
+                       <span class="rec keep-galmuri">REC</span>
+                       <iframe src="${CAM1_STREAM_URL}" allow="autoplay; fullscreen" scrolling="no"></iframe>
+                       <span class="stamp keep-galmuri"></span>`;
+        s3.appendChild(d);
+      } else {
+        d.innerHTML = `${labelHtml}
+                       <div class="nosig"><span class="keep-galmuri">NO SIGNAL</span></div>`;
+        s3.appendChild(d);
+      }
+      d.addEventListener('click', ()=>{
+        const already = d.classList.contains('expanded');
+        document.querySelectorAll('.cam').forEach(c=>c.classList.remove('expanded'));
+        s3.classList.toggle('has-expanded', !already);
+        if(!already) d.classList.add('expanded');
+      });
+    });
+    setInterval(()=>{
+      const t = new Date();
+      const pad = n=>String(n).padStart(2,'0');
+      const s = `${t.getFullYear()}-${pad(t.getMonth()+1)}-${pad(t.getDate())} ${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
+      document.querySelectorAll('.cam .stamp').forEach(el=>el.textContent=s);
+    }, 500);
+  }
+}
+
+/* CAM 01은 MediaMTX WebRTC 웹 플레이어를 iframe으로 표시합니다. */
+</script>
+</body>
+</html>
